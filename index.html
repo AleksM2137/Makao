@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Makao</title>
+    <style>
+        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas {
+            /* Gra ma wewnętrznie 400x300, ale na ekranie zajmie max 90% szerokości lub wysokości okna */
+            max-width: 90vw;
+            max-height: 90vh;
+            width: 100%;
+            height: auto;
+            /* Opcjonalnie: wyłącza rozmycie pikseli dla gier pixel-art */
+            image-rendering: pixelated; 
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="1920" height="1080"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="script.js" defer></script>
+</body>
+</html>
