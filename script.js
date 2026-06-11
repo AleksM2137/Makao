@@ -146,10 +146,23 @@ function update() {
             botCardIndex++;
         }
     });
-    if (playerCardIndex == 0){
-        canvas.replaceWith(Object.assign(document.createElement('h1'), { textContent: "Player WON!" }));
-    }else if (botCardIndex == 0){
-        canvas.replaceWith(Object.assign(document.createElement('h1'), { textContent: "Bot WON!" }));
+    if (playerCardIndex + botCardIndex === 0){
+        let div = document.createElement('div');
+        let h1 = document.createElement('h1');
+        let button = document.createElement('button');
+        if (playerCardIndex == 0){
+            h1.innerHTML = "PLAYER WON!";
+        }else if (botCardIndex == 0){
+            h1.innerHTML = "BOT WON!";
+        };
+        button.innerText = "Restart!";
+
+        button.addEventListener("click", () => {
+            window.location.reload();
+        });
+        div.appendChild(h1);
+        div.appendChild(button);
+        canvas.replaceWith(div);
     }
 
     if (startBot){
