@@ -3,6 +3,9 @@ const ctx = canvas.getContext("2d");
 const wait = ms => new Promise(res => setTimeout(res, ms));
 let cardSize = [96,128];
 let startBot = false;
+let playerCardIndex = 0;
+let botCardIndex = 0;
+let botWaiting = false;
 const Places = Object.freeze({
     DECK: [canvas.width / 2 - cardSize[0] / 2 - cardSize[0] * 4, canvas.height / 2 - cardSize[1] / 2],
     TABLE: [canvas.width / 2 - cardSize[0] / 2, canvas.height / 2 - cardSize[1] / 2],
@@ -36,14 +39,25 @@ class Card {
     }
 
 
+    goTo(newLocation) {
+        this.location = newLocation;
+        // W zależności od nowej lokalizacji, ustawiamy współrzędne docelowe (target)
+        // Całym rozstawianiem (liczeniem indeksów ręki) zajmiemy się globalnie w update!
+    }
+
+    // Ta funkcja wykonuje się co klatkę i płynnie przesuwa kartę do celu
+    updateAnimation() {
+        // Prosty algorytm płynnego zbliżania się do celu (Lerp)
+        // Karta w każdej klatce pokonuje 15% dystansu jaki pozostał do celu
+        this.x += (this.targetX - this.x) * 0.15;
+        this.y += (this.targetY - this.y) * 0.15;
+    }
+
     draw(nx, ny) {
         const img = cardImages[this.toString()];
         if (img) {
-            ctx.drawImage(img, this.x + nx, this.y + ny,...cardSize);
+            ctx.drawImage(img, this.x + nx, this.y + ny, cardSize[0], cardSize[1]);
         }
-    }
-    goTo(location){
-        this.location = location
     }
 }
 
@@ -59,18 +73,18 @@ types.forEach(type => {
 });
 cards = _.shuffle(cards);
 
-cards.at(-1).goTo(CardLocation.TABLE);
+cards.at(-1).location = CardLocation.TABLE;
 cards.at(-1).reversed = false;
 _.range(7).forEach(i => {
     let topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
     if (topDeckCard) {
-        topDeckCard.goTo(CardLocation.PLAYER);
+        topDeckCard.location = CardLocation.PLAYER;
         topDeckCard.reversed = false;
         
     }
     topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
     if (topDeckCard) {
-        topDeckCard.goTo(CardLocation.BOT);
+        topDeckCard.location = CardLocation.BOT;
         topDeckCard.reversed = false;
         ////////////////////////
     }
@@ -88,7 +102,7 @@ canvas.addEventListener("mousemove", (event) => {
 canvas.addEventListener("click", () => {
     const x = mouse.x;
     const y = mouse.y;
-    
+    if (botWaiting) return
 
     let clickedCard = null;
 
@@ -99,82 +113,94 @@ canvas.addEventListener("click", () => {
         }
     });
 
-    if (clickedCard) {
+    if (!clickedCard) return
     
-        if (clickedCard.location === CardLocation.DECK) {
-        
-            topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
-            if (topDeckCard) {
-                topDeckCard.goTo(CardLocation.PLAYER);
-                topDeckCard.reversed = false;
-                startBot = true;
-            }
+    if (clickedCard.location === CardLocation.DECK) {
+    
+        topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+        if (topDeckCard) {
+            topDeckCard.goTo(CardLocation.PLAYER);
+            topDeckCard.reversed = false;
+            startBot = true;
         }
+    }else if (clickedCard.location === CardLocation.PLAYER) {
     
-        else if (clickedCard.location === CardLocation.PLAYER) {
+        let topTableCard = cards.filter(c => c.location === CardLocation.TABLE).at(-1);
         
-            let topTableCard = cards.filter(c => c.location === CardLocation.TABLE).at(-1);
-            
-        
-            if (clickedCard.sign === topTableCard.sign || clickedCard.color === topTableCard.color) {
-                clickedCard.goTo(CardLocation.TABLE);
-                cards.splice(cards.indexOf(clickedCard),1)
-                cards.push(clickedCard)
-                switch(clickedCard.sign){
-                    case "2":
-                        _.range(2).forEach(i =>{
+    
+        if (clickedCard.sign === topTableCard.sign || clickedCard.color === topTableCard.color || clickedCard.sign === "Q" || topTableCard.sign === "Q") {
+            clickedCard.goTo(CardLocation.TABLE);
+            cards.splice(cards.indexOf(clickedCard),1)
+            cards.push(clickedCard)
+            switch(clickedCard.sign){
+                case "2":
+                    _.range(2).forEach(i =>{
+                        topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                        if (topDeckCard){
+                            topDeckCard.goTo(CardLocation.BOT);
+                            topDeckCard.reversed = false;
+                            /////////////////
+                        }
+                    })
+                break
+                case "3":
+                    _.range(3).forEach(i =>{
+                        topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                        if (topDeckCard){
+                            topDeckCard.goTo(CardLocation.BOT);
+                            topDeckCard.reversed = false;
+                            /////////////////
+                        }
+                    })
+                break
+                case "4":
+                    startBot = false;
+                break
+                case "K":
+                    if (clickedCard.color === "♥" || clickedCard.color === "♠"){
+                        _.range(5).forEach(i =>{
                             topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
                             if (topDeckCard){
                                 topDeckCard.goTo(CardLocation.BOT);
                                 topDeckCard.reversed = false;
                                 /////////////////
                             }
-                        })
-                        break
-                    case "3":
-                        _.range(3).forEach(i =>{
-                            topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
-                            if (topDeckCard){
-                                topDeckCard.goTo(CardLocation.BOT);
-                                topDeckCard.reversed = false;
-                                /////////////////
-                            }
-                        })
-                        break
-                    case "4":
-                        startBot = false;
-                    break
-                        default:
-                        startBot = true;
-                    break
-                }
-            } else {
-                console.log("Ta karta nie pasuje!");
+                        })}else{startBot = true;}
+                break
+                default:
+                    startBot = true;
+                break
             }
+        } else {
+            console.log("Ta karta nie pasuje!");
         }
     }
+    
 });
 
-function update() {
- 
-    let playerCardIndex = 0;
-    let botCardIndex = 0;
+async function update() {
+    playerCardIndex = 0;
+    botCardIndex = 0;
     cards.forEach(card => {
+        // 1. USTAWIANIE CELÓW (Gdzie karta MA docelowo lecieć)
         if (card.location === CardLocation.DECK) {
-            card.x = Places.DECK[0];
-            card.y = Places.DECK[1];
+            card.targetX = Places.DECK[0];
+            card.targetY = Places.DECK[1];
         } else if (card.location === CardLocation.TABLE) {
-            card.x = Places.TABLE[0];
-            card.y = Places.TABLE[1];
+            card.targetX = Places.TABLE[0];
+            card.targetY = Places.TABLE[1];
         } else if (card.location === CardLocation.PLAYER) {
-            card.x = Places.HAND_START[0] + playerCardIndex * (cardSize[0]*1.25);
-            card.y = Places.HAND_START[1];
+            card.targetX = Places.HAND_START[0] + playerCardIndex * (cardSize[0] * 1.25);
+            card.targetY = Places.HAND_START[1];
             playerCardIndex++;
         } else if (card.location === CardLocation.BOT) {
-            card.x = Places.BOT_START[0] + botCardIndex * (cardSize[0]*1.25);
-            card.y = Places.BOT_START[1];
+            card.targetX = Places.BOT_START[0] + botCardIndex * (cardSize[0] * 1.25);
+            card.targetY = Places.BOT_START[1];
             botCardIndex++;
         }
+
+        // 2. AKTUALIZACJA ANIMACJI: Każda karta robi mały krok w stronę swojego celu
+        card.updateAnimation();
     });
     const cardsInDeck = cards.filter(c => c.location === CardLocation.DECK).length;
     const cardsInTable = cards.filter(c => c.location === CardLocation.TABLE).length;
@@ -222,6 +248,9 @@ function update() {
 
     if (startBot){
         startBot = false;
+        botWaiting = true;
+        await wait(1000);
+        botWaiting = false;
         topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
         topTableCard = cards.filter(c => c.location === CardLocation.TABLE).at(-1);
         
@@ -234,6 +263,49 @@ function update() {
                     cards.push(card)
                     card.reversed = false;
                     moved = true;
+                    switch(card.sign){
+                        case "2":
+                            _.range(2).forEach(i =>{
+                                topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                                if (topDeckCard){
+                                    topDeckCard.goTo(CardLocation.PLAYER);
+                                    topDeckCard.reversed = false;
+                                    /////////////////
+                                }
+                            })
+                            startBot = true;
+                        break
+                        case "3":
+                            _.range(3).forEach(i =>{
+                                topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                                if (topDeckCard){
+                                    topDeckCard.goTo(CardLocation.PLAYER);
+                                    topDeckCard.reversed = false;
+                                    /////////////////
+                                }
+                            })
+                            startBot = true;
+                        break
+                        case "4":
+                            startBot = true;
+                        break
+                        case "K":
+                            if (card.color === "♥" || card.color === "♠"){
+                                _.range(5).forEach(i =>{
+                                    topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                                    if (topDeckCard){
+                                        topDeckCard.goTo(CardLocation.PLAYER);
+                                        topDeckCard.reversed = false;
+                                        /////////////////
+                                    }
+                                })
+                            startBot = true;
+                            }
+                        break
+                        default:
+                            startBot = false;
+                        break
+                    }
                 };
             };
         });
@@ -255,7 +327,12 @@ function draw() {
 
     ctx.strokeRect(...Places.TABLE, cardSize[0], cardSize[1]);
     ctx.strokeRect(...Places.DECK, cardSize[0], cardSize[1]);
-
+    if (botWaiting){
+        ctx.fillStyle = "red";
+    }else{
+        ctx.fillStyle = "green";
+    }
+    ctx.fillRect(canvas.width / 2 - cardSize[0] / 2, canvas.height / 2 - cardSize[1] / 2, 15, 15);
 
     let deckCount = 0;
     let tableCount = 0;
@@ -268,13 +345,20 @@ function draw() {
             card.draw(tableCount * 0.5, -tableCount * 0.5);
             tableCount++;
         } else if (card.location === CardLocation.PLAYER) {
-            if (card.sign === topTableCard.sign || card.color === topTableCard.color){
-                ctx.strokeStyle = "darkgreen";
+            if (card.sign === topTableCard.sign || card.color === topTableCard.color || card.sign === "Q" || topTableCard.sign === "Q"){
+                ctx.globalAlpha = 1;
+                ctx.filter = "none";
             }else{
-                ctx.strokeStyle = "red";
+                ctx.globalAlpha = 0.75;
+                ctx.filter = "brightness(50%)";
             }
-            ctx.strokeRect(card.x,card.y, cardSize[0], cardSize[1]);
+            if (botWaiting){
+                ctx.globalAlpha = 0.75;
+                ctx.filter = "brightness(50%)";
+            }
             card.draw(0, 0);
+            ctx.globalAlpha = 1;
+            ctx.filter = "none";
         } else if (card.location === CardLocation.BOT) {
             card.draw(0, 0);
         }
