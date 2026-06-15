@@ -6,6 +6,7 @@ let startBot = false;
 let playerCardIndex = 0;
 let botCardIndex = 0;
 let botWaiting = false;
+let ended = false;
 const Places = Object.freeze({
     DECK: [canvas.width / 2 - cardSize[0] / 2 - cardSize[0] * 4, canvas.height / 2 - cardSize[1] / 2],
     TABLE: [canvas.width / 2 - cardSize[0] / 2, canvas.height / 2 - cardSize[1] / 2],
@@ -75,7 +76,7 @@ cards = _.shuffle(cards);
 
 cards.at(-1).location = CardLocation.TABLE;
 cards.at(-1).reversed = false;
-_.range(7).forEach(i => {
+_.range(5).forEach(i => {
     let topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
     if (topDeckCard) {
         topDeckCard.location = CardLocation.PLAYER;
@@ -128,7 +129,7 @@ canvas.addEventListener("click", () => {
         let topTableCard = cards.filter(c => c.location === CardLocation.TABLE).at(-1);
         
     
-        if (clickedCard.sign === topTableCard.sign || clickedCard.color === topTableCard.color || clickedCard.sign === "Q" || topTableCard.sign === "Q") {
+        if (canPlace(clickedCard)) {
             clickedCard.goTo(CardLocation.TABLE);
             cards.splice(cards.indexOf(clickedCard),1)
             cards.push(clickedCard)
@@ -215,35 +216,77 @@ async function update() {
     
         deckCards = _.shuffle(deckCards);
         const playerHandCards = cards.filter(c => c.location === CardLocation.PLAYER);
+        const botHandCards = cards.filter(c => c.location === CardLocation.BOT);
         
         cards = [
             ...deckCards,     
             ...playerHandCards,
+            ...botHandCards,
             topTableCard      
         ];
 
-        cards.forEach(card=>{
-            console.log(card.location)
-        });
     }
 
     if (playerCardIndex === 0 || botCardIndex === 0){
+        ended = true;
         let div = document.createElement('div');
         let h1 = document.createElement('h1');
         let button = document.createElement('button');
-        if (playerCardIndex == 0){
-            h1.innerHTML = "PLAYER WON!";
-        }else if (botCardIndex == 0){
-            h1.innerHTML = "BOT WON!";
-        };
-        button.innerText = "Restart!";
 
+        if (playerCardIndex === 0) {
+            h1.innerHTML = "PLAYER WON!";
+        } else if (botCardIndex === 0) {
+            h1.innerHTML = "BOT WON!";
+        }
+
+        button.innerText = "Restart!";
         button.addEventListener("click", () => {
             window.location.reload();
         });
+
         div.appendChild(h1);
         div.appendChild(button);
-        canvas.replaceWith(div);
+
+        //  KLUCZOWE: Wrzucamy do body strony, a nie do canvasu!
+        document.body.appendChild(div);
+
+        // ==========================================
+        // CZARODZIEJSKI CSS STYLIZOWANY W JAVASCRIPT
+        // ==========================================
+        // Sprawia, że DIV unosi się dokładnie nad środkiem Canvasu
+
+        // 1. Pozycjonowanie absolutne na środku ekranu
+        div.style.position = "absolute";
+        div.style.top = "50%";
+        div.style.left = "50%";
+        div.style.transform = "translate(-50%, -50%)"; // Idealne wycentrowanie
+
+        // 2. Ładny wygląd okienka (Pop-up)
+        div.style.background = "rgba(0, 0, 0, 0.9)"; // Czarne, lekko przezroczyste tło
+        div.style.padding = "40px";
+        div.style.borderRadius = "15px";
+        div.style.border = "3px solid white";
+        div.style.textAlign = "center";
+        div.style.boxShadow = "0 0 20px rgba(0,0,0,0.5)";
+
+        // 3. Styl tekstu H1
+        h1.style.color = playerCardIndex === 0 ? "lime" : "red"; // Zielony dla gracza, czerwony dla bota
+        h1.style.fontFamily = "Arial, sans-serif";
+        h1.style.margin = "0 0 20px 0";
+
+        // 4. Styl przycisku Restart
+        button.style.padding = "10px 30px";
+        button.style.fontSize = "18px";
+        button.style.fontWeight = "bold";
+        button.style.cursor = "pointer";
+        button.style.border = "none";
+        button.style.borderRadius = "5px";
+        button.style.backgroundColor = "#fff";
+        button.style.color = "#000";
+
+        // Mały efekt podświetlenia przycisku
+        button.addEventListener("mouseover", () => button.style.backgroundColor = "#ddd");
+        button.addEventListener("mouseleave", () => button.style.backgroundColor = "#fff");
     }
 
     if (startBot){
@@ -257,7 +300,7 @@ async function update() {
         let moved = false;  
         _.shuffle(cards).forEach(card => {
             if (card.location === CardLocation.BOT && !moved) {
-                if (card.sign === topTableCard.sign || card.color === topTableCard.color) {
+                if (canPlace(card)) {
                     card.goTo(CardLocation.TABLE);
                     cards.splice(cards.indexOf(card),1)
                     cards.push(card)
@@ -316,7 +359,10 @@ async function update() {
         };
     };
 };
-
+function canPlace(card){
+    topTableCard = cards.filter(c => c.location === CardLocation.TABLE).at(-1);
+    return (card.sign === topTableCard.sign || card.color === topTableCard.color || card.sign === "Q" || topTableCard.sign === "Q")
+}
 function draw() {
     ctx.fillStyle = "darkgreen";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -332,7 +378,9 @@ function draw() {
     }else{
         ctx.fillStyle = "green";
     }
-    ctx.fillRect(canvas.width / 2 - cardSize[0] / 2, canvas.height / 2 - cardSize[1] / 2, 15, 15);
+    ctx.strokeStyle = "black";
+    ctx.fillRect(canvas.width / 2 + cardSize[0], canvas.height / 2 - 16, 32, 32);
+    ctx.strokeRect(canvas.width / 2 + cardSize[0], canvas.height / 2 - 16,32, 32);
 
     let deckCount = 0;
     let tableCount = 0;
@@ -345,7 +393,7 @@ function draw() {
             card.draw(tableCount * 0.5, -tableCount * 0.5);
             tableCount++;
         } else if (card.location === CardLocation.PLAYER) {
-            if (card.sign === topTableCard.sign || card.color === topTableCard.color || card.sign === "Q" || topTableCard.sign === "Q"){
+            if (canPlace(card)){
                 ctx.globalAlpha = 1;
                 ctx.filter = "none";
             }else{
@@ -368,7 +416,13 @@ function draw() {
 function gameLoop() {
     update();
     draw();
+    if (!ended){
     requestAnimationFrame(gameLoop); 
+    }else{
+        _.range(100).forEach(i=>{
+            cards.filter(c => c.updateAnimation === undefined);
+        })
+    }
 }
 const imgBack = new Image();
 imgBack.src = `cards/Back.png`;
