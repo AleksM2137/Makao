@@ -7,6 +7,8 @@ let playerCardIndex = 0;
 let botCardIndex = 0;
 let botWaiting = false;
 let ended = false;
+let scrlIndex = 50;
+let keys = {};
 const Places = Object.freeze({
     DECK: [canvas.width / 2 - cardSize[0] / 2 - cardSize[0] * 4, canvas.height / 2 - cardSize[1] / 2],
     TABLE: [canvas.width / 2 - cardSize[0] / 2, canvas.height / 2 - cardSize[1] / 2],
@@ -178,7 +180,8 @@ canvas.addEventListener("click", () => {
     }
     
 });
-
+window.addEventListener("keydown", (e) => keys[e.key] = true);
+window.addEventListener("keyup", (e) => keys[e.key] = false);
 async function update() {
     playerCardIndex = 0;
     botCardIndex = 0;
@@ -191,7 +194,7 @@ async function update() {
             card.targetX = Places.TABLE[0];
             card.targetY = Places.TABLE[1];
         } else if (card.location === CardLocation.PLAYER) {
-            card.targetX = Places.HAND_START[0] + playerCardIndex * (cardSize[0] * 1.25);
+            card.targetX = Places.HAND_START[0] + playerCardIndex * (cardSize[0] * 1.25) - scrlIndex;
             card.targetY = Places.HAND_START[1];
             playerCardIndex++;
         } else if (card.location === CardLocation.BOT) {
@@ -203,6 +206,12 @@ async function update() {
         // 2. AKTUALIZACJA ANIMACJI: Każda karta robi mały krok w stronę swojego celu
         card.updateAnimation();
     });
+    if (keys["a"] || keys["ArrowLeft"]){
+        scrlIndex += 10;
+    }else if (keys["d"] || keys["ArrowRight"]){
+        scrlIndex -= 10;
+    }
+    scrlIndex = _.clamp(scrlIndex, 0, playerCardIndex * (cardSize[0] * 1.25)- 14 * (cardSize[0] * 1.25));
     const cardsInDeck = cards.filter(c => c.location === CardLocation.DECK).length;
     const cardsInTable = cards.filter(c => c.location === CardLocation.TABLE).length;
     if (cardsInDeck === 0 && cardsInTable > 1) {
@@ -419,7 +428,7 @@ function gameLoop() {
     if (!ended){
     requestAnimationFrame(gameLoop); 
     }else{
-        _.range(100).forEach(i=>{
+        _.range(10000).forEach(i=>{
             cards.filter(c => c.updateAnimation === undefined);
         })
     }
