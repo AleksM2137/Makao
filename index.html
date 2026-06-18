@@ -7,15 +7,22 @@
         body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; }
         div {z-index: 1;}
         canvas {
-            /* Gra ma wewnętrznie 400x300, ale na ekranie zajmie max 90% szerokości lub wysokości okna */
+            /* Ustalamy sztywne proporcje logiczne gry (400x300 to proporcje 4/3) */
+            aspect-ratio: 16 / 9;
+
+            /* Gra zajmie max 90% szerokości lub wysokości, w zależności od tego, co skończy się pierwsze */
             max-width: 90vw;
             max-height: 90vh;
-            width: 100%;
+
+            /* Te dwie reguły współpracują z aspect-ratio, zapobiegając rozciąganiu */
+            width: auto;
             height: auto;
-            /* Opcjonalnie: wyłącza rozmycie pikseli dla gier pixel-art */
+
+            /* Opcjonalnie: wyłącza rozmycie pikseli */
             image-rendering: pixelated; 
             background: #000;
         }
+
     </style>
 </head>
 <body>

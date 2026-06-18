@@ -2,18 +2,19 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const wait = ms => new Promise(res => setTimeout(res, ms));
 let cardSize = [96,128];
-let startBot = false;
+let startBot = Boolean(_.random(0, 1));
 let playerCardIndex = 0;
 let botCardIndex = 0;
 let botWaiting = false;
 let ended = false;
 let scrlIndex = 50;
+let drawCoinAfter = 50;
 let keys = {};
 const Places = Object.freeze({
     DECK: [canvas.width / 2 - cardSize[0] / 2 - cardSize[0] * 4, canvas.height / 2 - cardSize[1] / 2],
     TABLE: [canvas.width / 2 - cardSize[0] / 2, canvas.height / 2 - cardSize[1] / 2],
-    HAND_START: [cardSize[1]*1.5625, canvas.height - cardSize[1]*1.5625],
-    BOT_START: [cardSize[1]*1.5625, cardSize[1]*1.5625-cardSize[1]]
+    HAND_START: [cardSize[1]*1.5625 - (cardSize[0] * 1.25), canvas.height - cardSize[1]*1.5625],
+    BOT_START: [cardSize[1]*1.5625 - (cardSize[0] * 1.25), cardSize[1]*1.5625-cardSize[1]]
 });
 
 const CardLocation = Object.freeze({
@@ -22,7 +23,83 @@ const CardLocation = Object.freeze({
     PLAYER: "PLAYER",
     BOT: "BOT"
 });
+class Coin {
+    constructor(x, y, size) {
+        this.x = x;
+        this.y = y;
+        this.size = size;
 
+        this.isSpinning = false;
+        this.scaleX = 1;          // Aktualne skalowanie w poziomie (od 1 do -1)
+        this.spinSpeed = 0.15;     // Prędkość obrotu
+        this.side = 1;      // Aktualna strona ("orzel" lub "reszka")
+        this.targetSide = 0; // Strona, na której moneta ma wylądować
+        this.rotationsLeft = 0;   // Ile pełnych obrotów ma wykonać
+        this.frames = 3;
+    }
+
+    // Funkcja uruchamiająca rzut
+    flip() {
+        if (this.isSpinning) return; // Blokujemy ponowne kliknięcie w trakcie lotu
+        // Losujemy stronę docelową (odpowiednik random.choice z Lodash)
+        this.targetSide = Number(startBot); 
+        this.isSpinning = true;
+        this.rotationsLeft = 6; // Moneta obróci się 6 razy (czyli zrobi 3 pełne pętle)
+    }
+
+    // Funkcja aktualizująca animację (wywoływana w update())
+    updateAnimation() {
+        if (!this.isSpinning) return;
+        this.frames++;
+        this.size = 160 - Math.sin(this.frames / 10) * 30;
+        this.x = canvas.width / 2 - this.size/2
+        this.y = 80-(this.size-160)/2
+
+        // Zmniejszamy szerokość monety (symulacja obrotu)
+        this.scaleX -= this.spinSpeed;
+
+        // Gdy moneta staje się idealnie "cienka" (szerokość przechodzi przez 0)
+        if (this.scaleX <= 0 && this.scaleX + this.spinSpeed > 0) {
+            // Zmieniamy stronę wizualną na przeciwną w połowie obrotu
+            this.side = (this.side === 1) ? 0 : 1;
+        }
+
+        // Gdy moneta zrobiła pół obrotu (skala doszła do -1)
+        if (this.scaleX <= -1) {
+            this.scaleX = 1; // Resetujemy skalę do początku
+            this.rotationsLeft--;
+
+            // Jeśli to był ostatni obrót, zatrzymujemy monetę na właściwej stronie
+            if (this.rotationsLeft <= 0) {
+                this.side = this.targetSide;
+                this.scaleX = 1;
+                this.isSpinning = false;
+                console.log(`Wypadło: ${this.side}!`);
+            }
+        }
+    }
+
+    // Rysowanie monety na środku swojej pozycji
+    draw(ctx) {
+        // Monety ładujemy tak samo jak karty (musisz mieć orzel.png i reszka.png)
+        const img = cardImages[this.side]; 
+        if (!img) return;
+
+        ctx.save(); // Zapisujemy stan płótna
+
+        // Przesuwamy punkt rysowania na środek monety (kluczowe do obrotu!)
+        ctx.translate(this.x + this.size / 2, this.y + this.size / 2);
+
+        // Skalujemy płótno w poziomie! To tworzy efekt 3D flippowania
+        ctx.scale(this.scaleX, 1);
+
+        // Rysujemy monetę wycentrowaną (odjmujemy połowę rozmiaru)
+        ctx.drawImage(img, -this.size / 2, -this.size / 2, this.size, this.size);
+
+        ctx.restore(); // Przywracamy stan płótna do normy
+    }
+}
+const gameCoin = new Coin(canvas.width / 2, 80, 160);
 class Card {
     constructor(sign, color) {
         this.sign = sign;
@@ -44,8 +121,6 @@ class Card {
 
     goTo(newLocation) {
         this.location = newLocation;
-        // W zależności od nowej lokalizacji, ustawiamy współrzędne docelowe (target)
-        // Całym rozstawianiem (liczeniem indeksów ręki) zajmiemy się globalnie w update!
     }
 
     // Ta funkcja wykonuje się co klatkę i płynnie przesuwa kartę do celu
@@ -76,22 +151,6 @@ types.forEach(type => {
 });
 cards = _.shuffle(cards);
 
-cards.at(-1).location = CardLocation.TABLE;
-cards.at(-1).reversed = false;
-_.range(5).forEach(i => {
-    let topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
-    if (topDeckCard) {
-        topDeckCard.location = CardLocation.PLAYER;
-        topDeckCard.reversed = false;
-        
-    }
-    topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
-    if (topDeckCard) {
-        topDeckCard.location = CardLocation.BOT;
-        topDeckCard.reversed = false;
-        ////////////////////////
-    }
-})
 const mouse = { x: 0, y: 0 };
 
 canvas.addEventListener("mousemove", (event) => {
@@ -141,8 +200,7 @@ canvas.addEventListener("click", () => {
                         topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
                         if (topDeckCard){
                             topDeckCard.goTo(CardLocation.BOT);
-                            topDeckCard.reversed = false;
-                            /////////////////
+                            topDeckCard.reversed = true;
                         }
                     })
                 break
@@ -151,8 +209,7 @@ canvas.addEventListener("click", () => {
                         topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
                         if (topDeckCard){
                             topDeckCard.goTo(CardLocation.BOT);
-                            topDeckCard.reversed = false;
-                            /////////////////
+                            topDeckCard.reversed = true;
                         }
                     })
                 break
@@ -165,8 +222,7 @@ canvas.addEventListener("click", () => {
                             topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
                             if (topDeckCard){
                                 topDeckCard.goTo(CardLocation.BOT);
-                                topDeckCard.reversed = false;
-                                /////////////////
+                                topDeckCard.reversed = true;
                             }
                         })}else{startBot = true;}
                 break
@@ -183,10 +239,9 @@ canvas.addEventListener("click", () => {
 window.addEventListener("keydown", (e) => keys[e.key] = true);
 window.addEventListener("keyup", (e) => keys[e.key] = false);
 async function update() {
-    playerCardIndex = 0;
-    botCardIndex = 0;
-    cards.forEach(card => {
-        // 1. USTAWIANIE CELÓW (Gdzie karta MA docelowo lecieć)
+    if (gameCoin.isSpinning){
+        gameCoin.updateAnimation()
+        cards.forEach(card => {
         if (card.location === CardLocation.DECK) {
             card.targetX = Places.DECK[0];
             card.targetY = Places.DECK[1];
@@ -202,16 +257,36 @@ async function update() {
             card.targetY = Places.BOT_START[1];
             botCardIndex++;
         }
-
-        // 2. AKTUALIZACJA ANIMACJI: Każda karta robi mały krok w stronę swojego celu
+        card.updateAnimation();
+    });
+        return
+    }
+    playerCardIndex = 0;
+    botCardIndex = 0;
+    cards.forEach(card => {
+        if (card.location === CardLocation.DECK) {
+            card.targetX = Places.DECK[0];
+            card.targetY = Places.DECK[1];
+        } else if (card.location === CardLocation.TABLE) {
+            card.targetX = Places.TABLE[0];
+            card.targetY = Places.TABLE[1];
+        } else if (card.location === CardLocation.PLAYER) {
+            card.targetX = Places.HAND_START[0] + playerCardIndex * (cardSize[0] * 1.25) - scrlIndex;
+            card.targetY = Places.HAND_START[1];
+            playerCardIndex++;
+        } else if (card.location === CardLocation.BOT) {
+            card.targetX = Places.BOT_START[0] + botCardIndex * (cardSize[0] * 1.25);
+            card.targetY = Places.BOT_START[1];
+            botCardIndex++;
+        }
         card.updateAnimation();
     });
     if (keys["a"] || keys["ArrowLeft"]){
-        scrlIndex += 10;
-    }else if (keys["d"] || keys["ArrowRight"]){
         scrlIndex -= 10;
+    }else if (keys["d"] || keys["ArrowRight"]){
+        scrlIndex += 10;
     }
-    scrlIndex = _.clamp(scrlIndex, 0, playerCardIndex * (cardSize[0] * 1.25)- 14 * (cardSize[0] * 1.25));
+    scrlIndex = _.clamp(scrlIndex, 0, playerCardIndex * (cardSize[0] * 1.25)- 15 * (cardSize[0] * 1.25));
     const cardsInDeck = cards.filter(c => c.location === CardLocation.DECK).length;
     const cardsInTable = cards.filter(c => c.location === CardLocation.TABLE).length;
     if (cardsInDeck === 0 && cardsInTable > 1) {
@@ -322,7 +397,6 @@ async function update() {
                                 if (topDeckCard){
                                     topDeckCard.goTo(CardLocation.PLAYER);
                                     topDeckCard.reversed = false;
-                                    /////////////////
                                 }
                             })
                             startBot = true;
@@ -333,7 +407,6 @@ async function update() {
                                 if (topDeckCard){
                                     topDeckCard.goTo(CardLocation.PLAYER);
                                     topDeckCard.reversed = false;
-                                    /////////////////
                                 }
                             })
                             startBot = true;
@@ -348,7 +421,6 @@ async function update() {
                                     if (topDeckCard){
                                         topDeckCard.goTo(CardLocation.PLAYER);
                                         topDeckCard.reversed = false;
-                                        /////////////////
                                     }
                                 })
                             startBot = true;
@@ -363,8 +435,7 @@ async function update() {
         });
         if (topDeckCard && !moved) {
             topDeckCard.goTo(CardLocation.BOT);
-            topDeckCard.reversed = false;
-            ////////////////////////
+            topDeckCard.reversed = true;
         };
     };
 };
@@ -420,22 +491,56 @@ function draw() {
             card.draw(0, 0);
         }
     });
+    if (gameCoin.isSpinning){
+        gameCoin.draw(ctx)
+    }else if (drawCoinAfter > 0){
+        if (drawCoinAfter === 50){
+            _.range(5).forEach(i => {
+                cards.at(-1).location = CardLocation.TABLE;
+                cards.at(-1).reversed = false;
+                let topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                if (topDeckCard) {
+                    topDeckCard.location = CardLocation.PLAYER;
+                    topDeckCard.reversed = false;
+                    
+                }
+                topDeckCard = cards.filter(c => c.location === CardLocation.DECK).at(-1);
+                if (topDeckCard) {
+                    topDeckCard.location = CardLocation.BOT;
+                    topDeckCard.reversed = true;
+                }
+            })
+        } 
+        gameCoin.draw(ctx)
+        drawCoinAfter--;
+    }
 }
 
 function gameLoop() {
     update();
     draw();
     if (!ended){
-    requestAnimationFrame(gameLoop); 
+        requestAnimationFrame(gameLoop); 
     }else{
-        _.range(10000).forEach(i=>{
-            cards.filter(c => c.updateAnimation === undefined);
-        })
+        cards.forEach(c => {c.x = c.targetX;c.y = c.targetY});
+        draw();
     }
+}
+async function start(){
+    gameCoin.flip()
+    gameLoop()
 }
 const imgBack = new Image();
 imgBack.src = `cards/Back.png`;
-const cardImages = {"Back": imgBack};
+const imgBot = new Image();
+imgBot.src = `cards/Back.png`;
+const imgPlayer = new Image();
+imgPlayer.src = `cards/Back.png`;
+const imgBotCoin = new Image();
+imgBotCoin.src = `cards/BotCoin.png`;
+const imgPlayerCoin = new Image();
+imgPlayerCoin.src = `cards/PlayerCoin.png`;
+const cardImages = {"Back": imgBack,"0": imgPlayerCoin,"1": imgBotCoin};
 
 let totalImages = 0;
 let loadedImages = 0;
@@ -452,7 +557,7 @@ cards.forEach(card => {
     img.onload = () => {
         loadedImages++;
         if (loadedImages === totalImages) {
-            gameLoop();
+            start();
         }
     };
     img.onerror = () => {
